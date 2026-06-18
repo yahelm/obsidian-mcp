@@ -13,3 +13,16 @@ services:
       - ${VAULT_HOST_PATH}:/vault
     stdin_open: true
     tty: true
+
+  bot:
+    image: obsidian-mcp
+    container_name: obsidian-bot
+    restart: unless-stopped
+    env_file:
+      - ../.env
+      - ../.env.local
+    volumes:
+      - ${VAULT_HOST_PATH}:/vault
+    command: obsidian-bot
+    depends_on:
+      - app

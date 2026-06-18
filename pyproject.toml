@@ -9,10 +9,13 @@ dependencies = [
     "python-frontmatter>=1.1.0",
     "pyyaml>=6.0",
     "markdown-it-py>=3.0.0",
+    "openai>=1.0.0",
+    "python-telegram-bot>=21.0.0",
 ]
 
 [project.scripts]
 obsidian-mcp = "obsidian_mcp.server:main"
+obsidian-bot = "obsidian_mcp.bot:main"
 
 [dependency-groups]
 dev = [
