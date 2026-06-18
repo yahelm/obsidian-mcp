@@ -46,7 +46,7 @@ ARG GIT_EMAIL=vladmelekh@gmail.com
 RUN git config --global safe.directory /vault && \
     git config --global user.name "${GIT_USER}" && \
     git config --global user.email "${GIT_EMAIL}" && \
-    git config --global core.sshCommand "ssh -i /root/.ssh/id_ed25519 -o StrictHostKeyChecking=no"
+    git config --global core.sshCommand "ssh -i /tmp/.ssh/id_ed25519 -o StrictHostKeyChecking=no"
 
 ARG BUILD_RELEASE
 ENV BUILD_RELEASE=${BUILD_RELEASE}
