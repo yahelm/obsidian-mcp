@@ -393,7 +393,7 @@ def search_with_snippets(query: str, context_lines: int = 2) -> str:
 
 @mcp.tool()
 def search_and_replace(
-    query: str, replacement: str, folder: str = "", dry_run: bool = True
+    query: str, replacement: str, folder: str = "", dry_run: bool = False
 ) -> str:
     """Search and replace text across vault or folder.
 
