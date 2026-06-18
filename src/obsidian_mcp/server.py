@@ -10,6 +10,7 @@ import yaml
 from mcp.server.fastmcp import FastMCP
 
 VAULT = Path(os.environ.get("VAULT_PATH", "/home/opc/vault-work"))
+SKILLS_DIR = Path(os.environ.get("SKILLS_PATH", "/var/app/skills"))
 GIT = shutil.which("git") or "git"
 
 mcp = FastMCP("obsidian")
@@ -513,6 +514,36 @@ def validate_note(path: str) -> str:
             issues.append(f"Broken link: [[{link}]]")
 
     return "valid" if not issues else "\n".join(issues)
+
+
+# --- skills ---
+
+
+@mcp.tool()
+def list_skills() -> str:
+    """List available skills with their names and descriptions."""
+    if not SKILLS_DIR.exists():
+        return "No skills available"
+    skills = []
+    for skill_file in sorted(SKILLS_DIR.glob("*/SKILL.md")):
+        post = frontmatter.loads(skill_file.read_text())
+        name = post.metadata.get("name", skill_file.parent.name)
+        description = post.metadata.get("description", "")
+        skills.append(f"- {name}: {description}")
+    return "\n".join(skills) if skills else "No skills available"
+
+
+@mcp.tool()
+def read_skill(name: str) -> str:
+    """Load full instructions for a skill by name."""
+    if not SKILLS_DIR.exists():
+        return f"Skill not found: {name}"
+    for skill_file in SKILLS_DIR.glob("*/SKILL.md"):
+        post = frontmatter.loads(skill_file.read_text())
+        skill_name = str(post.metadata.get("name", skill_file.parent.name))
+        if skill_name.lower() == name.lower():
+            return skill_file.read_text()
+    return f"Skill not found: {name}"
 
 
 def main() -> None:

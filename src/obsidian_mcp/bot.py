@@ -5,12 +5,14 @@ import subprocess
 from datetime import date
 from pathlib import Path
 
+import frontmatter
 from openai import AsyncOpenAI
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 
 VAULT = Path(os.environ.get("VAULT_PATH", "/home/opc/vault-work"))
 RULES_PATH = "_system/rules.md"
+SKILLS_DIR = Path(os.environ.get("SKILLS_PATH", "/var/app/skills"))
 MCP_CMD = ["obsidian-mcp"]
 
 
@@ -19,6 +21,25 @@ def _load_rules() -> str:
     if rules_file.exists():
         return rules_file.read_text()
     return ""
+
+
+def _load_skills_summary() -> str:
+    """Load skill names + descriptions only for system prompt discovery."""
+    if not SKILLS_DIR.exists():
+        return ""
+    lines = []
+    for skill_file in sorted(SKILLS_DIR.glob("*/SKILL.md")):
+        post = frontmatter.loads(skill_file.read_text())
+        name = post.metadata.get("name", skill_file.parent.name)
+        description = post.metadata.get("description", "")
+        lines.append(f"- {name}: {description}")
+    if not lines:
+        return ""
+    header = "## Available Skills\nUse read_skill(name) for full instructions."
+    return header + "\n" + "\n".join(lines)
+
+
+SKILLS_SUMMARY = _load_skills_summary()
 
 
 client = AsyncOpenAI(
@@ -155,6 +176,26 @@ def _get_tools() -> list[dict]:
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_skills",
+                "description": "List available skills with names and descriptions",
+                "parameters": {"type": "object", "properties": {}, "required": []},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "read_skill",
+                "description": "Load full instructions for a skill by name",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}},
+                    "required": ["name"],
+                },
+            },
+        },
     ]
 
 
@@ -197,14 +238,19 @@ def _call_mcp_tool(name: str, args: dict) -> str:
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    text = update.message.text  # type: ignore[union-attr]
+    text = str(update.message.text or "")  # type: ignore[union-attr]
     rules = _load_rules()
     today = date.today().isoformat()
-    system_content = (
-        "You are a personal assistant managing an Obsidian knowledge vault.\n"
-        "Use the provided tools to read, create, and edit notes.\n"
-        f"Today's date is {today}.\n\n"
-        f"{rules}"
+    system_content = "\n\n".join(
+        filter(
+            bool,
+            [
+                "You are a personal assistant managing an Obsidian knowledge vault.",
+                f"Today's date is {today}.",
+                rules,
+                SKILLS_SUMMARY,
+            ],
+        )
     )
     messages = [
         {"role": "system", "content": system_content},
@@ -245,7 +291,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 def main() -> None:
     token = os.environ["TELEGRAM_TOKEN"]
     app = ApplicationBuilder().token(token).build()
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.TEXT, handle_message))
     app.run_polling()
 
 

@@ -33,6 +33,7 @@ RUN --mount=type=cache,target=${UV_CACHE_DIR} \
     uv sync --no-install-project --no-dev
 
 COPY src/ ./src/
+COPY skills/ ./skills/
 
 RUN --mount=type=cache,target=${UV_CACHE_DIR} \
     uv sync --no-dev
