@@ -3,8 +3,10 @@ import json
 import logging
 import os
 import subprocess
+from collections import defaultdict, deque
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import frontmatter
 from openai import AsyncOpenAI
@@ -18,6 +20,10 @@ VAULT = Path(os.environ.get("VAULT_PATH", "/home/opc/vault-work"))
 RULES_PATH = "_system/rules.md"
 SKILLS_DIR = Path(os.environ.get("SKILLS_PATH", "/var/app/skills"))
 MCP_CMD = ["obsidian-mcp"]
+MAX_HISTORY = int(os.environ.get("MAX_HISTORY", "40"))
+
+# per-user conversation history (user_id -> deque of messages)
+_history: dict[int, deque[Any]] = defaultdict(lambda: deque(maxlen=MAX_HISTORY))
 
 
 def _load_rules() -> str:
@@ -28,7 +34,6 @@ def _load_rules() -> str:
 
 
 def _load_skills_summary() -> str:
-    """Load skill names + descriptions only for system prompt discovery."""
     if not SKILLS_DIR.exists():
         return ""
     lines = []
@@ -43,14 +48,15 @@ def _load_skills_summary() -> str:
     return header + "\n" + "\n".join(lines)
 
 
+# load once at startup
+RULES = _load_rules()
 SKILLS_SUMMARY = _load_skills_summary()
-
 
 client = AsyncOpenAI(
     api_key=os.environ["LLM_API_KEY"],
     base_url=os.environ["LLM_BASE_URL"],
 )
-MODEL = os.environ.get("LLM_MODEL", "gemini-2.0-flash")
+MODEL = os.environ.get("LLM_MODEL", "gpt-4o-mini")
 
 
 def _mcp_input(method: str, params: dict, req_id: int = 1) -> str:
@@ -77,7 +83,6 @@ def _mcp_input(method: str, params: dict, req_id: int = 1) -> str:
 
 
 def _discover_tools() -> list[dict]:
-    """Query MCP server for available tools at startup."""
     proc = subprocess.run(  # noqa: S603
         MCP_CMD,
         input=_mcp_input("tools/list", {}),
@@ -105,7 +110,7 @@ def _discover_tools() -> list[dict]:
                 ]
         except json.JSONDecodeError:
             continue
-    logger.warning("Failed to discover tools from MCP server: %s", proc.stderr[:200])
+    logger.warning("Failed to discover tools: %s", proc.stderr[:200])
     return []
 
 
@@ -134,28 +139,32 @@ def _call_mcp_tool(name: str, args: dict) -> str:
     return f"Tool error: {proc.stderr[:200]}"
 
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    text = str(update.message.text or "")  # type: ignore[union-attr]
-    logger.info("message: %s", text)
-    rules = _load_rules()
+def _build_system_prompt() -> str:
     today = date.today().isoformat()
     tool_names = ", ".join(t["function"]["name"] for t in TOOLS)
-    system_content = "\n\n".join(
+    return "\n\n".join(
         filter(
             bool,
             [
                 "You are a personal assistant managing an Obsidian knowledge vault.",
                 f"Today's date is {today}.",
                 f"## Available MCP Tools\n{tool_names}",
-                rules,
+                RULES,
                 SKILLS_SUMMARY,
             ],
         )
     )
-    messages = [
-        {"role": "system", "content": system_content},
-        {"role": "user", "content": text},
-    ]
+
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id  # type: ignore[union-attr]
+    text = str(update.message.text or "")  # type: ignore[union-attr]
+    logger.info("user=%s message=%s", user_id, text)
+
+    history = _history[user_id]
+    history.append({"role": "user", "content": text})
+
+    messages = [{"role": "system", "content": _build_system_prompt()}] + list(history)
 
     for _ in range(10):
         response = await client.chat.completions.create(  # type: ignore[call-overload]
@@ -168,9 +177,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         messages.append(msg)
 
         if not msg.tool_calls:
-            await update.message.reply_text(msg.content or "Done.")  # type: ignore[union-attr]
+            reply = msg.content or "Done."
+            await update.message.reply_text(reply)  # type: ignore[union-attr]
+            history.append({"role": "assistant", "content": reply})
             return
 
+        history.append(msg)
         for tc in msg.tool_calls:
             args = json.loads(tc.function.arguments)
             logger.info("tool call: %s %s", tc.function.name, args)
@@ -178,13 +190,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 None, _call_mcp_tool, tc.function.name, args
             )
             logger.info("tool result: %s", result[:200])
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": result,
-                }
-            )
+            tool_msg = {
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": result,
+            }
+            messages.append(tool_msg)
+            history.append(tool_msg)
 
     await update.message.reply_text("Reached tool call limit.")  # type: ignore[union-attr]
 
