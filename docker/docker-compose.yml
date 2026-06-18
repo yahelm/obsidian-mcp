@@ -1,0 +1,14 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: obsidian-mcp
+    container_name: obsidian-mcp
+    restart: unless-stopped
+    environment:
+      VAULT_PATH: /vault
+    volumes:
+      - /home/opc/vault-work:/vault
+    stdin_open: true
+    tty: true

@@ -18,7 +18,7 @@ py/install:
 
 .PHONY: py/check
 py/check:
-	uv run python -c "import server; print('OK')"
+	uv run python -c "from obsidian_mcp import server; print('OK')"
 
 .PHONY: py/lint
 py/lint: py/lint/ruff py/lint/mypy

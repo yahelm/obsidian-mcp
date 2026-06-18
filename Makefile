@@ -1,8 +1,10 @@
 # PandaDoc Automation Makefile
 
-# Python targets
 include makes/py.mk
+include makes/docker.mk
 
-# Default target
 .PHONY: help
-help: py/help
+help: py/help docker/help
+
+.PHONY: lint
+lint: py/lint

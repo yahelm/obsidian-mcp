@@ -1,12 +1,16 @@
-from mcp.server.fastmcp import FastMCP
-from pathlib import Path
-from datetime import date
-import subprocess
+import os
 import re
-import yaml
-import frontmatter
+import shutil
+import subprocess
+from datetime import date
+from pathlib import Path
 
-VAULT = Path("/home/opc/vault-work")
+import frontmatter
+import yaml
+from mcp.server.fastmcp import FastMCP
+
+VAULT = Path(os.environ.get("VAULT_PATH", "/home/opc/vault-work"))
+GIT = shutil.which("git") or "git"
 
 mcp = FastMCP("obsidian")
 
@@ -15,13 +19,13 @@ mcp = FastMCP("obsidian")
 
 
 def _git_push(msg: str) -> None:
-    subprocess.run(["git", "add", "-A"], cwd=VAULT, check=True)
-    result = subprocess.run(
-        ["git", "commit", "-m", f"bot: {msg}"], cwd=VAULT, capture_output=True
+    subprocess.run([GIT, "add", "-A"], cwd=VAULT, check=True)  # noqa: S603
+    result = subprocess.run(  # noqa: S603
+        [GIT, "commit", "-m", f"bot: {msg}"], cwd=VAULT, capture_output=True
     )
     if result.returncode not in (0, 1):
         raise RuntimeError(f"git commit failed: {result.stderr.decode()}")
-    subprocess.run(["git", "push"], cwd=VAULT, check=True)
+    subprocess.run([GIT, "push"], cwd=VAULT, check=True)  # noqa: S603
 
 
 def _extract_links(text: str) -> list[str]:
@@ -327,7 +331,10 @@ def find_broken_links() -> str:
 
 @mcp.tool()
 def patch_content_by_anchor(path: str, heading: str, action: str, content: str) -> str:
-    """Edit a specific section of a note by heading. action: append | prepend | replace"""
+    """Edit a specific section of a note by heading.
+
+    action: append | prepend | replace
+    """
     target = VAULT / path
     if not target.exists():
         return f"Not found: {path}"
@@ -387,7 +394,10 @@ def search_with_snippets(query: str, context_lines: int = 2) -> str:
 def search_and_replace(
     query: str, replacement: str, folder: str = "", dry_run: bool = True
 ) -> str:
-    """Search and replace text across vault or folder. dry_run=True by default — shows changes without applying."""
+    """Search and replace text across vault or folder.
+
+    dry_run=True by default — shows changes without applying.
+    """
     if not query:
         return "Error: query cannot be empty"
     base = VAULT / folder if folder else VAULT
@@ -404,7 +414,7 @@ def search_and_replace(
         f"{f.relative_to(VAULT)}: {c} occurrence(s)" for f, _, c in matches
     )
     if dry_run:
-        return f"DRY RUN — would replace in:\n{summary}\n\nCall again with dry_run=False to apply."
+        return f"DRY RUN — would replace in:\n{summary}\n\nCall again with dry_run=False to apply."  # noqa: E501
     for f, text, _ in matches:
         f.write_text(text.replace(query, replacement))
     _git_push(f"replace '{query}' -> '{replacement}'")
@@ -505,5 +515,9 @@ def validate_note(path: str) -> str:
     return "valid" if not issues else "\n".join(issues)
 
 
-if __name__ == "__main__":
+def main() -> None:
     mcp.run()
+
+
+if __name__ == "__main__":
+    main()
