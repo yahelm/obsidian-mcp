@@ -25,12 +25,15 @@ When the user wants to log an expense:
 ---
 date: YYYY-MM-DD
 total: AMOUNT
+currency: CURRENCY
 ---
 
 | Amount | Category | Description |
 |--------|----------|-------------|
 | AMOUNT CURRENCY | CATEGORY | DESCRIPTION |
 ```
+
+Always include the currency symbol/code in the Amount column (e.g. `32.00 PLN`, `15.50 EUR`).
 
 5. When appending to existing note:
    - Add new row to the expense table
