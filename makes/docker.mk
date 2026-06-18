@@ -16,6 +16,8 @@ docker/build:
 		--tag=obsidian-mcp \
 		--file=docker/Dockerfile \
 		--build-arg BUILD_RELEASE=dev \
+		--build-arg GIT_USER=$(GIT_USER) \
+		--build-arg GIT_EMAIL=$(GIT_EMAIL) \
 		--load \
 		$(options) \
 		.

@@ -26,6 +26,8 @@ COPY --from=ghcr.io/astral-sh/uv:0.11.19 /uv /uvx /bin/
 
 COPY Makefile pyproject.toml uv.lock README.md ./
 COPY makes/ ./makes/
+COPY docker/entrypoint.sh ./entrypoint.sh
+RUN chmod +x entrypoint.sh
 
 RUN --mount=type=cache,target=${UV_CACHE_DIR} \
     uv sync --no-install-project --no-dev
@@ -37,7 +39,16 @@ RUN --mount=type=cache,target=${UV_CACHE_DIR} \
 
 ENV UV_NO_SYNC=1
 
+ARG GIT_USER=yahelm
+ARG GIT_EMAIL=vladmelekh@gmail.com
+
+RUN git config --global safe.directory /vault && \
+    git config --global user.name "${GIT_USER}" && \
+    git config --global user.email "${GIT_EMAIL}" && \
+    git config --global core.sshCommand "ssh -i /root/.ssh/id_ed25519 -o StrictHostKeyChecking=no"
+
 ARG BUILD_RELEASE
 ENV BUILD_RELEASE=${BUILD_RELEASE}
 
+ENTRYPOINT ["./entrypoint.sh"]
 CMD ["obsidian-mcp"]

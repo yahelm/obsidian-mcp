@@ -6,9 +6,10 @@ services:
     image: obsidian-mcp
     container_name: obsidian-mcp
     restart: unless-stopped
-    environment:
-      VAULT_PATH: /vault
+    env_file:
+      - ../.env
+      - ../.env.local
     volumes:
-      - /home/opc/vault-work:/vault
+      - ${VAULT_HOST_PATH}:/vault
     stdin_open: true
     tty: true
