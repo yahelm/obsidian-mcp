@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import subprocess
+from datetime import date
 from pathlib import Path
 
 from openai import AsyncOpenAI
@@ -198,9 +199,11 @@ def _call_mcp_tool(name: str, args: dict) -> str:
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text  # type: ignore[union-attr]
     rules = _load_rules()
+    today = date.today().isoformat()
     system_content = (
         "You are a personal assistant managing an Obsidian knowledge vault.\n"
-        "Use the provided tools to read, create, and edit notes.\n\n"
+        "Use the provided tools to read, create, and edit notes.\n"
+        f"Today's date is {today}.\n\n"
         f"{rules}"
     )
     messages = [
