@@ -41,6 +41,8 @@ RUN --mount=type=cache,target=${UV_CACHE_DIR} \
 ENV UV_NO_SYNC=1 \
     HOME=/tmp
 
+RUN useradd --uid 1000 --no-create-home --shell /bin/bash appuser
+
 ARG GIT_USER=yahelm
 ARG GIT_EMAIL=vladmelekh@gmail.com
 ENV GIT_USER=${GIT_USER} \
