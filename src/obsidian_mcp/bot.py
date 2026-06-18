@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import subprocess
 from datetime import date
@@ -9,6 +10,9 @@ import frontmatter
 from openai import AsyncOpenAI
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger(__name__)
 
 VAULT = Path(os.environ.get("VAULT_PATH", "/home/opc/vault-work"))
 RULES_PATH = "_system/rules.md"
@@ -251,6 +255,7 @@ def _call_mcp_tool(name: str, args: dict) -> str:
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = str(update.message.text or "")  # type: ignore[union-attr]
+    logger.info("message: %s", text)
     rules = _load_rules()
     today = date.today().isoformat()
     system_content = "\n\n".join(
@@ -286,9 +291,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         for tc in msg.tool_calls:
             args = json.loads(tc.function.arguments)
+            logger.info("tool call: %s %s", tc.function.name, args)
             result = await asyncio.get_event_loop().run_in_executor(
                 None, _call_mcp_tool, tc.function.name, args
             )
+            logger.info("tool result: %s", result[:200])
             messages.append(
                 {
                     "role": "tool",
