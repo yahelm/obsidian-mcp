@@ -9,7 +9,16 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 
 VAULT = Path(os.environ.get("VAULT_PATH", "/home/opc/vault-work"))
+RULES_PATH = "_system/rules.md"
 MCP_CMD = ["obsidian-mcp"]
+
+
+def _load_rules() -> str:
+    rules_file = VAULT / RULES_PATH
+    if rules_file.exists():
+        return rules_file.read_text()
+    return ""
+
 
 client = AsyncOpenAI(
     api_key=os.environ["LLM_API_KEY"],
@@ -188,15 +197,14 @@ def _call_mcp_tool(name: str, args: dict) -> str:
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text  # type: ignore[union-attr]
+    rules = _load_rules()
+    system_content = (
+        "You are a personal assistant managing an Obsidian knowledge vault.\n"
+        "Use the provided tools to read, create, and edit notes.\n\n"
+        f"{rules}"
+    )
     messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are a personal assistant managing an Obsidian knowledge vault. "
-                "Use the provided tools to read, create, and edit notes. "
-                "Be concise in your responses."
-            ),
-        },
+        {"role": "system", "content": system_content},
         {"role": "user", "content": text},
     ]
 
