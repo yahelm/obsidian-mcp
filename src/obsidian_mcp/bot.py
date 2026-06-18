@@ -53,14 +53,7 @@ client = AsyncOpenAI(
 MODEL = os.environ.get("LLM_MODEL", "gemini-2.0-flash")
 
 
-def _discover_tools() -> list[dict]:
-    """Query MCP server for available tools at startup."""
-    request = {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "tools/list",
-        "params": {},
-    }
+def _mcp_input(method: str, params: dict, req_id: int = 1) -> str:
     init = {
         "jsonrpc": "2.0",
         "id": 0,
@@ -71,9 +64,23 @@ def _discover_tools() -> list[dict]:
             "clientInfo": {"name": "bot", "version": "1.0"},
         },
     }
+    initialized = {"jsonrpc": "2.0", "method": "notifications/initialized"}
+    request = {"jsonrpc": "2.0", "id": req_id, "method": method, "params": params}
+    return (
+        json.dumps(init)
+        + "\n"
+        + json.dumps(initialized)
+        + "\n"
+        + json.dumps(request)
+        + "\n"
+    )
+
+
+def _discover_tools() -> list[dict]:
+    """Query MCP server for available tools at startup."""
     proc = subprocess.run(  # noqa: S603
         MCP_CMD,
-        input=json.dumps(init) + "\n" + json.dumps(request) + "\n",
+        input=_mcp_input("tools/list", {}),
         capture_output=True,
         text=True,
         timeout=30,
@@ -106,25 +113,9 @@ TOOLS = _discover_tools()
 
 
 def _call_mcp_tool(name: str, args: dict) -> str:
-    request = {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "tools/call",
-        "params": {"name": name, "arguments": args},
-    }
-    init = {
-        "jsonrpc": "2.0",
-        "id": 0,
-        "method": "initialize",
-        "params": {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": {"name": "bot", "version": "1.0"},
-        },
-    }
     proc = subprocess.run(  # noqa: S603
         MCP_CMD,
-        input=json.dumps(init) + "\n" + json.dumps(request) + "\n",
+        input=_mcp_input("tools/call", {"name": name, "arguments": args}),
         capture_output=True,
         text=True,
         timeout=30,
