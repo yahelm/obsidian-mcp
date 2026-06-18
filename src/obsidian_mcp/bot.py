@@ -53,166 +53,56 @@ client = AsyncOpenAI(
 MODEL = os.environ.get("LLM_MODEL", "gemini-2.0-flash")
 
 
-def _get_tools() -> list[dict]:
-    return [
-        {
-            "type": "function",
-            "function": {
-                "name": "create_note",
-                "description": "Create or overwrite a note",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string"},
-                        "content": {"type": "string"},
-                    },
-                    "required": ["path", "content"],
-                },
-            },
+def _discover_tools() -> list[dict]:
+    """Query MCP server for available tools at startup."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/list",
+        "params": {},
+    }
+    init = {
+        "jsonrpc": "2.0",
+        "id": 0,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "bot", "version": "1.0"},
         },
-        {
-            "type": "function",
-            "function": {
-                "name": "read_note",
-                "description": "Read a note by relative path",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"path": {"type": "string"}},
-                    "required": ["path"],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "edit_note",
-                "description": "Append content to existing note",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string"},
-                        "content": {"type": "string"},
-                    },
-                    "required": ["path", "content"],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "list_notes",
-                "description": "List notes in vault or subfolder",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"folder": {"type": "string"}},
-                    "required": [],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "search_notes",
-                "description": "Search note contents for a string",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"query": {"type": "string"}},
-                    "required": ["query"],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "get_daily_note",
-                "description": "Get or create today's daily note",
-                "parameters": {"type": "object", "properties": {}, "required": []},
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "get_todos",
-                "description": "Find all incomplete todos in vault or folder",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"folder": {"type": "string"}},
-                    "required": [],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "complete_todo",
-                "description": "Mark a todo as complete",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string"},
-                        "todo_text": {"type": "string"},
-                    },
-                    "required": ["path", "todo_text"],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "search_with_snippets",
-                "description": "Search vault and return matching lines with context",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"query": {"type": "string"}},
-                    "required": ["query"],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "get_backlinks",
-                "description": "Find all notes that link to this note",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"path": {"type": "string"}},
-                    "required": ["path"],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "delete_note",
-                "description": "Delete a note by path",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"path": {"type": "string"}},
-                    "required": ["path"],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "list_skills",
-                "description": "List available skills with names and descriptions",
-                "parameters": {"type": "object", "properties": {}, "required": []},
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "read_skill",
-                "description": "Load full instructions for a skill by name",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"name": {"type": "string"}},
-                    "required": ["name"],
-                },
-            },
-        },
-    ]
+    }
+    proc = subprocess.run(  # noqa: S603
+        MCP_CMD,
+        input=json.dumps(init) + "\n" + json.dumps(request) + "\n",
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    for line in proc.stdout.splitlines():
+        try:
+            msg = json.loads(line)
+            if msg.get("id") == 1:
+                tools = msg.get("result", {}).get("tools", [])
+                return [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": t["name"],
+                            "description": t.get("description", ""),
+                            "parameters": t.get(
+                                "inputSchema", {"type": "object", "properties": {}}
+                            ),
+                        },
+                    }
+                    for t in tools
+                ]
+        except json.JSONDecodeError:
+            continue
+    logger.warning("Failed to discover tools from MCP server: %s", proc.stderr[:200])
+    return []
+
+
+TOOLS = _discover_tools()
 
 
 def _call_mcp_tool(name: str, args: dict) -> str:
@@ -258,12 +148,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     logger.info("message: %s", text)
     rules = _load_rules()
     today = date.today().isoformat()
+    tool_names = ", ".join(t["function"]["name"] for t in TOOLS)
     system_content = "\n\n".join(
         filter(
             bool,
             [
                 "You are a personal assistant managing an Obsidian knowledge vault.",
                 f"Today's date is {today}.",
+                f"## Available MCP Tools\n{tool_names}",
                 rules,
                 SKILLS_SUMMARY,
             ],
@@ -274,12 +166,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         {"role": "user", "content": text},
     ]
 
-    tools = _get_tools()
     for _ in range(10):
         response = await client.chat.completions.create(  # type: ignore[call-overload]
             model=MODEL,
             messages=messages,
-            tools=tools,
+            tools=TOOLS,
             tool_choice="auto",
         )
         msg = response.choices[0].message
