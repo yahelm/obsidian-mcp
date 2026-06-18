@@ -6,4 +6,15 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.28.0",
+    "python-frontmatter>=1.1.0",
+    "pyyaml>=6.0",
+    "markdown-it-py>=3.0.0",
+    "make>=0.1.6.post2",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.1.0",
+    "ruff>=0.15.17",
+    "types-pyyaml>=6.0.12.20260518",
 ]
