@@ -6,6 +6,7 @@ services:
     image: obsidian-mcp
     container_name: obsidian-mcp
     restart: unless-stopped
+    user: "${HOST_UID}:${HOST_GID}"
     env_file:
       - ../.env
       - ../.env.local
@@ -18,6 +19,7 @@ services:
     image: obsidian-mcp
     container_name: obsidian-bot
     restart: unless-stopped
+    user: "${HOST_UID}:${HOST_GID}"
     env_file:
       - ../.env
       - ../.env.local

@@ -179,6 +179,18 @@ def _get_tools() -> list[dict]:
         {
             "type": "function",
             "function": {
+                "name": "delete_note",
+                "description": "Delete a note by path",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                    "required": ["path"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "list_skills",
                 "description": "List available skills with names and descriptions",
                 "parameters": {"type": "object", "properties": {}, "required": []},
