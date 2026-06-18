@@ -38,15 +38,13 @@ COPY skills/ ./skills/
 RUN --mount=type=cache,target=${UV_CACHE_DIR} \
     uv sync --no-dev
 
-ENV UV_NO_SYNC=1
+ENV UV_NO_SYNC=1 \
+    HOME=/tmp
 
 ARG GIT_USER=yahelm
 ARG GIT_EMAIL=vladmelekh@gmail.com
-
-RUN git config --global safe.directory /vault && \
-    git config --global user.name "${GIT_USER}" && \
-    git config --global user.email "${GIT_EMAIL}" && \
-    git config --global core.sshCommand "ssh -i /tmp/.ssh/id_ed25519 -o StrictHostKeyChecking=no"
+ENV GIT_USER=${GIT_USER} \
+    GIT_EMAIL=${GIT_EMAIL}
 
 ARG BUILD_RELEASE
 ENV BUILD_RELEASE=${BUILD_RELEASE}
